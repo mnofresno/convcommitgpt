@@ -39,7 +39,7 @@ setup_builder() {
     # Remove existing builder if it exists
     docker buildx rm multiarch-builder 2>/dev/null || true
     
-    # Create a new builder instance with qemu support
+    # Create a new builder instance
     docker buildx create --name multiarch-builder --driver docker-container --use
     
     # Start the builder
@@ -54,58 +54,88 @@ prepare_build_dir() {
     BUILD_DIR=$(mktemp -d)
     print_message "Created build directory: $BUILD_DIR" "$GREEN"
     
-    # Copy necessary files
+    # Copy all Python files, requirements.txt, and markdown files
+    cp *.py "$BUILD_DIR/" 2>/dev/null || true
+    cp requirements.txt "$BUILD_DIR/" 2>/dev/null || true
+    cp *.md "$BUILD_DIR/" 2>/dev/null || true
     cp Dockerfile "$BUILD_DIR/"
-    cp requirements.txt "$BUILD_DIR/"
-    cp convcommit.py "$BUILD_DIR/"
-    cp assistant.py "$BUILD_DIR/"
-    cp diff_generator.py "$BUILD_DIR/"
-    cp runner.py "$BUILD_DIR/"
-    cp spinner.py "$BUILD_DIR/"
-    cp instructions_prompt.md "$BUILD_DIR/"
     
     # Change to build directory
     cd "$BUILD_DIR"
+    
+    # Verify essential files exist
+    if [ ! -f "requirements.txt" ] || [ ! -f "convcommit.py" ] || [ ! -f "Dockerfile" ]; then
+        print_message "Error: Essential files are missing" "$RED"
+        return 1
+    fi
 }
 
-# Function to detect host architecture
-detect_architecture() {
-    case "$(uname -m)" in
-        "x86_64")
-            echo "linux/amd64"
-            ;;
-        "arm64"|"aarch64")
-            echo "linux/arm64"
-            ;;
-        *)
-            print_message "Error: Unsupported architecture $(uname -m)" "$RED"
-            exit 1
-            ;;
-    esac
-}
-
-# Build and push multi-architecture images
-build_and_push() {
-    print_message "Building and pushing multi-architecture images..." "$YELLOW"
+# Build and push for a specific architecture
+build_and_push_arch() {
+    local arch=$1
+    local version=$2
     
-    # Get host architecture
-    ARCH=$(detect_architecture)
-    print_message "Building for architecture: $ARCH" "$GREEN"
+    print_message "Building and pushing for architecture: $arch" "$YELLOW"
     
-    # Build and push for host architecture only
     if ! docker buildx build \
-        --platform "$ARCH" \
-        --tag ghcr.io/mnofresno/convcommitgpt:1.0.0 \
-        --tag ghcr.io/mnofresno/convcommitgpt:latest \
+        --platform "linux/$arch" \
+        --tag "ghcr.io/mnofresno/convcommitgpt:latest-$arch" \
+        --tag "ghcr.io/mnofresno/convcommitgpt:$version-$arch" \
         --push \
         --no-cache \
         --progress=plain \
         --build-arg BUILDKIT_INLINE_CACHE=1 \
         --build-arg DOCKER_BUILDKIT=1 \
         .; then
-        print_message "Error: Failed to build and push images" "$RED"
-        exit 1
+        print_message "Error: Failed to build and push image for $arch" "$RED"
+        return 1
     fi
+    
+    return 0
+}
+
+# Create and push manifest
+create_manifest() {
+    local version=$1
+    
+    print_message "Creating multi-arch manifest for version $version..." "$YELLOW"
+    
+    # Remove existing manifest if it exists
+    docker manifest rm "ghcr.io/mnofresno/convcommitgpt:$version" 2>/dev/null || true
+    
+    # Create new manifest
+    docker manifest create "ghcr.io/mnofresno/convcommitgpt:$version" \
+        "ghcr.io/mnofresno/convcommitgpt:$version-amd64" \
+        "ghcr.io/mnofresno/convcommitgpt:$version-arm64"
+    
+    # Push manifest
+    docker manifest push "ghcr.io/mnofresno/convcommitgpt:$version"
+}
+
+# Build and push multi-architecture images
+build_and_push() {
+    print_message "Building and pushing multi-architecture images..." "$YELLOW"
+    
+    local version="1.0.0"
+    
+    # Build and push for amd64
+    if ! build_and_push_arch "amd64" "$version"; then
+        return 1
+    fi
+    
+    # Build and push for arm64
+    if ! build_and_push_arch "arm64" "$version"; then
+        return 1
+    fi
+    
+    # Create and push manifests
+    create_manifest "latest"
+    create_manifest "$version"
+    
+    # Verify manifests
+    print_message "Verifying manifests..." "$YELLOW"
+    docker manifest inspect "ghcr.io/mnofresno/convcommitgpt:latest"
+    docker manifest inspect "ghcr.io/mnofresno/convcommitgpt:$version"
 }
 
 # Cleanup
@@ -128,7 +158,11 @@ main() {
     prepare_build_dir
     
     # Build and push
-    build_and_push
+    if ! build_and_push; then
+        print_message "Error: Build and push failed" "$RED"
+        cleanup
+        exit 1
+    fi
     
     # Cleanup
     cleanup
