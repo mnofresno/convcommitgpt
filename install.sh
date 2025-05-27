@@ -64,8 +64,28 @@ check_ollama() {
 # Function to create necessary directories
 create_directories() {
     print_message "Creating necessary directories..." "$YELLOW"
-    mkdir -p ~/.local/bin
-    mkdir -p ~/.local/lib/convcommitgpt
+    
+    # Create ~/.local/bin if it doesn't exist
+    if [ ! -d ~/.local/bin ]; then
+        print_message "Creating ~/.local/bin directory..." "$YELLOW"
+        mkdir -p ~/.local/bin
+        chmod 755 ~/.local/bin
+    fi
+    
+    # Create ~/.local/lib/convcommitgpt if it doesn't exist
+    if [ ! -d ~/.local/lib/convcommitgpt ]; then
+        print_message "Creating ~/.local/lib/convcommitgpt directory..." "$YELLOW"
+        mkdir -p ~/.local/lib/convcommitgpt
+        chmod 755 ~/.local/lib/convcommitgpt
+    fi
+    
+    # Add ~/.local/bin to PATH if it's not already there
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        print_message "Adding ~/.local/bin to PATH..." "$YELLOW"
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
 }
 
 # Function to backup existing installation
@@ -118,6 +138,7 @@ download_files() {
         fi
     done
 
+    print_message "Copying files to installation directory..." "$YELLOW"
     cp -r /tmp/*.py /tmp/*.txt /tmp/*.md /tmp/convcommit.sh ~/.local/lib/convcommitgpt/
     cd -
 }
@@ -143,11 +164,43 @@ setup_container_runtime() {
 # Function to setup symlinks
 setup_symlinks() {
     print_message "Setting up symlinks..." "$YELLOW"
-    # Create symlink to convcommit.sh
-    ln -sf ~/.local/lib/convcommitgpt/convcommit.sh ~/.local/bin/convcommit
-    # Set permissions
+    
+    # Ensure directories exist
+    create_directories
+    
+    # Verify source file exists
+    if [ ! -f ~/.local/lib/convcommitgpt/convcommit.sh ]; then
+        print_message "Error: Source file ~/.local/lib/convcommitgpt/convcommit.sh does not exist" "$RED"
+        exit 1
+    fi
+    
+    # Set permissions on source file
+    print_message "Setting permissions on convcommit.sh..." "$YELLOW"
     chmod +x ~/.local/lib/convcommitgpt/convcommit.sh
-    chmod +x ~/.local/bin/convcommit
+    
+    # Remove existing symlink if it exists
+    if [ -L ~/.local/bin/convcommit ]; then
+        print_message "Removing existing symlink..." "$YELLOW"
+        rm ~/.local/bin/convcommit
+    fi
+    
+    # Create new symlink
+    print_message "Creating new symlink..." "$YELLOW"
+    ln -sf ~/.local/lib/convcommitgpt/convcommit.sh ~/.local/bin/convcommit
+    
+    # Verify the symlink was created
+    if [ ! -L ~/.local/bin/convcommit ]; then
+        print_message "Error: Failed to create symlink" "$RED"
+        exit 1
+    fi
+    
+    # Verify the script is executable
+    if [ ! -x ~/.local/lib/convcommitgpt/convcommit.sh ]; then
+        print_message "Error: Failed to set executable permissions" "$RED"
+        exit 1
+    fi
+    
+    print_message "Symlink created successfully" "$GREEN"
 }
 
 # Main installation process
@@ -181,6 +234,29 @@ main() {
     print_message "You can now use 'convcommit' command" "$GREEN"
     print_message "Make sure Ollama is running with: ollama serve" "$YELLOW"
     print_message "And the model is pulled with: ollama pull qwen3:8b" "$YELLOW"
+    
+    # Print PATH information
+    print_message "Note: You may need to restart your terminal or run 'source ~/.bashrc' (or 'source ~/.zshrc') to update your PATH" "$YELLOW"
+    
+    # Print verification information
+    print_message "Verifying installation..." "$YELLOW"
+    if [ -L ~/.local/bin/convcommit ]; then
+        print_message "✓ Symlink exists" "$GREEN"
+    else
+        print_message "✗ Symlink does not exist" "$RED"
+    fi
+    
+    if [ -x ~/.local/lib/convcommitgpt/convcommit.sh ]; then
+        print_message "✓ Script is executable" "$GREEN"
+    else
+        print_message "✗ Script is not executable" "$RED"
+    fi
+    
+    if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
+        print_message "✓ ~/.local/bin is in PATH" "$GREEN"
+    else
+        print_message "✗ ~/.local/bin is not in PATH" "$RED"
+    fi
 }
 
 # Run main function
