@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 
 import click
 from openai import OpenAI, OpenAIError
@@ -40,17 +41,21 @@ class Assistant:
             click.secho(f"Error: The file at {instructions_path} was not found.")
             return ""
 
-        logger.debug("Getting Models List...")
+        verbose = os.getenv("VERBOSE", "false").lower() == "true"
+        if verbose:
+            logger.debug("Getting Models List...")
 
         spinner = Spinner(text=spinner_message)
 
         try:
             if model_name is None:
-              models = self.openai_client.models.list()
-              logger.debug(f"Model List: {models}")
-              logger.debug("Using completions API (no stream)...")
-              model_name = models.data[0].id
-            click.secho(f"\nSelected model: {model_name}")
+                models = self.openai_client.models.list()
+                if verbose:
+                    logger.debug(f"Model List: {models}")
+                    logger.debug("Using completions API (no stream)...")
+                model_name = models.data[0].id
+
+            click.secho(f"Selected model: {model_name}")
             spinner.start()
 
             chat_prompt = [
@@ -82,5 +87,6 @@ Try reducing the input size or increasing the `skynet.max_tokens` value.
             spinner.stop()
 
         completions_output = completions.choices[0].message.content
-        logger.debug(f"Response: '{completions_output}'")
+        if verbose:
+            logger.debug(f"Response: '{completions_output}'")
         return self._clean_output(completions_output)

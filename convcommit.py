@@ -56,7 +56,6 @@ def main(
     if debug_diff:
         click.secho(f"Received diff: {diff_to_analyze}", fg="green")
     
-    click.echo(f"Selected model: {model}")
     click.echo("-> Commit Message:")
     click.echo(commit_message)
 
