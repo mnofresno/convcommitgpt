@@ -8,6 +8,7 @@ RUN apt-get update && \
     git \
     curl \
     procps \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # Create virtual environment
@@ -27,6 +28,8 @@ ENV HTTPX_TIMEOUT=300
 ENV MAX_TOKENS=4096
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV OLLAMA_HOST=host.docker.internal
+ENV OLLAMA_PORT=11434
 
 # Create a non-root user
 RUN useradd -m -u 1000 appuser
