@@ -83,10 +83,10 @@ backup_existing() {
 setup_configuration() {
     if [ ! -f ~/.local/lib/convcommitgpt/.env ]; then
         print_message "Setting up configuration..." "$YELLOW"
-        read -p "Enter the Ollama base URL (default: http://host.docker.internal:11434/v1): " base_url
+        read -p "Enter the Ollama base URL (default: http://localhost:11434/v1): " base_url
         read -p "Enter the model name (default: qwen3:8b): " model
 
-        base_url=${base_url:-"http://host.docker.internal:11434/v1"}
+        base_url=${base_url:-"http://localhost:11434/v1"}
         model=${model:-"qwen3:8b"}
 
         cat > ~/.local/lib/convcommitgpt/.env << EOF
@@ -140,6 +140,16 @@ setup_container_runtime() {
     fi
 }
 
+# Function to setup symlinks
+setup_symlinks() {
+    print_message "Setting up symlinks..." "$YELLOW"
+    # Create symlink to convcommit.sh
+    ln -sf ~/.local/lib/convcommitgpt/convcommit.sh ~/.local/bin/convcommit
+    # Set permissions
+    chmod +x ~/.local/lib/convcommitgpt/convcommit.sh
+    chmod +x ~/.local/bin/convcommit
+}
+
 # Main installation process
 main() {
     print_message "Starting convcommitgpt installation..." "$GREEN"
@@ -158,16 +168,14 @@ main() {
     # Download and copy files
     download_files
 
-    # Set proper permissions
-    print_message "Setting permissions..." "$YELLOW"
-    chmod +x ~/.local/lib/convcommitgpt/convcommit.sh
-    chmod +x ~/.local/bin/convcommit
-
     # Setup container runtime
     setup_container_runtime
 
     # Setup configuration
     setup_configuration
+
+    # Setup symlinks and permissions
+    setup_symlinks
 
     print_message "Installation completed successfully!" "$GREEN"
     print_message "You can now use 'convcommit' command" "$GREEN"
