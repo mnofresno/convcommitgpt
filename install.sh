@@ -143,21 +143,42 @@ download_files() {
     cd -
 }
 
+# Function to detect system architecture
+detect_architecture() {
+    local arch=$(uname -m)
+    case $arch in
+        x86_64)
+            echo "amd64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            print_message "Error: Unsupported architecture: $arch" "$RED"
+            exit 1
+            ;;
+    esac
+}
+
 # Function to setup container runtime
 setup_container_runtime() {
     print_message "Setting up container runtime..." "$YELLOW"
     
-    # Pull Docker image
-    print_message "Pulling container image..." "$YELLOW"
-    if ! $CONTAINER_CMD pull ghcr.io/mnofresno/convcommitgpt:latest; then
-        print_message "Error: Failed to pull container image" "$RED"
+    # Detect architecture
+    local arch=$(detect_architecture)
+    print_message "Detected architecture: $arch" "$GREEN"
+    
+    # Pull Docker image with architecture-specific tag
+    print_message "Pulling container image for $arch..." "$YELLOW"
+    if ! $CONTAINER_CMD pull "ghcr.io/mnofresno/convcommitgpt:latest-$arch"; then
+        print_message "Error: Failed to pull container image for $arch" "$RED"
         exit 1
     fi
 
     # Tag image for local use
     if [[ "$CONTAINER_CMD" == "podman" ]]; then
         print_message "Tagging image for Podman..." "$YELLOW"
-        $CONTAINER_CMD tag ghcr.io/mnofresno/convcommitgpt:latest localhost/convcommitgpt:latest
+        $CONTAINER_CMD tag "ghcr.io/mnofresno/convcommitgpt:latest-$arch" localhost/convcommitgpt:latest
     fi
 }
 
