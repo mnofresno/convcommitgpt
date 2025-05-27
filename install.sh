@@ -20,16 +20,50 @@ command_exists() {
 check_container_runtime() {
     if command_exists docker; then
         CONTAINER_CMD="docker"
+        print_message "Docker detected" "$GREEN"
+        # Check if Docker daemon is running
+        if ! docker info >/dev/null 2>&1; then
+            print_message "Error: Docker daemon is not running" "$RED"
+            print_message "Please start Docker and try again" "$YELLOW"
+            exit 1
+        fi
     elif command_exists podman; then
         CONTAINER_CMD="podman"
+        print_message "Podman detected" "$GREEN"
+        # Check if Podman daemon is running
+        if ! podman info >/dev/null 2>&1; then
+            print_message "Error: Podman daemon is not running" "$RED"
+            print_message "Please start Podman and try again" "$YELLOW"
+            exit 1
+        fi
     else
         print_message "Error: Neither Docker nor Podman is installed" "$RED"
+        print_message "Please install Docker or Podman first" "$YELLOW"
         exit 1
+    fi
+}
+
+# Function to check Git
+check_git() {
+    if ! command_exists git; then
+        print_message "Error: Git is not installed" "$RED"
+        print_message "Please install Git first" "$YELLOW"
+        exit 1
+    fi
+}
+
+# Function to check Ollama
+check_ollama() {
+    if ! command_exists ollama; then
+        print_message "Warning: Ollama is not installed" "$YELLOW"
+        print_message "Please install Ollama from https://ollama.ai" "$YELLOW"
+        print_message "After installation, run: ollama pull qwen3:8b" "$YELLOW"
     fi
 }
 
 # Function to create necessary directories
 create_directories() {
+    print_message "Creating necessary directories..." "$YELLOW"
     mkdir -p ~/.local/bin
     mkdir -p ~/.local/lib/convcommitgpt
 }
@@ -62,12 +96,58 @@ EOF
     fi
 }
 
+# Function to download files
+download_files() {
+    print_message "Downloading files..." "$YELLOW"
+    cd /tmp
+    local files=(
+        "convcommit.py"
+        "assistant.py"
+        "diff_generator.py"
+        "runner.py"
+        "spinner.py"
+        "requirements.txt"
+        "instructions_prompt.md"
+        "convcommit.sh"
+    )
+
+    for file in "${files[@]}"; do
+        if ! curl -sSL "https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/${file}" -o "${file}"; then
+            print_message "Error: Failed to download ${file}" "$RED"
+            exit 1
+        fi
+    done
+
+    cp -r /tmp/*.py /tmp/*.txt /tmp/*.md /tmp/convcommit.sh ~/.local/lib/convcommitgpt/
+    cd -
+}
+
+# Function to setup container runtime
+setup_container_runtime() {
+    print_message "Setting up container runtime..." "$YELLOW"
+    
+    # Pull Docker image
+    print_message "Pulling container image..." "$YELLOW"
+    if ! $CONTAINER_CMD pull ghcr.io/mnofresno/convcommitgpt:latest; then
+        print_message "Error: Failed to pull container image" "$RED"
+        exit 1
+    fi
+
+    # Tag image for local use
+    if [[ "$CONTAINER_CMD" == "podman" ]]; then
+        print_message "Tagging image for Podman..." "$YELLOW"
+        $CONTAINER_CMD tag ghcr.io/mnofresno/convcommitgpt:latest localhost/convcommitgpt:latest
+    fi
+}
+
 # Main installation process
 main() {
     print_message "Starting convcommitgpt installation..." "$GREEN"
 
-    # Check container runtime
+    # Check dependencies
     check_container_runtime
+    check_git
+    check_ollama
 
     # Create directories
     create_directories
@@ -75,32 +155,24 @@ main() {
     # Backup existing installation
     backup_existing
 
-    # Copy files to installation directory
-    print_message "Copying files..." "$YELLOW"
-    cd /tmp
-    curl -sSL https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/convcommit.py -o convcommit.py
-    curl -sSL https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/assistant.py -o assistant.py
-    curl -sSL https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/diff_generator.py -o diff_generator.py
-    curl -sSL https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/runner.py -o runner.py
-    curl -sSL https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/spinner.py -o spinner.py
-    curl -sSL https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/requirements.txt -o requirements.txt
-    curl -sSL https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/instructions_prompt.md -o instructions_prompt.md
-    curl -sSL https://raw.githubusercontent.com/mnofresno/convcommitgpt/main/convcommit.sh -o convcommit.sh
-    cp -r /tmp/*.py /tmp/*.txt /tmp/*.md /tmp/convcommit.sh ~/.local/lib/convcommitgpt/
-    cd -
+    # Download and copy files
+    download_files
 
-    # Pull Docker image
-    print_message "Pulling Docker image..." "$YELLOW"
-    $CONTAINER_CMD pull ghcr.io/mnofresno/convcommitgpt:latest
+    # Set proper permissions
+    print_message "Setting permissions..." "$YELLOW"
+    chmod +x ~/.local/lib/convcommitgpt/convcommit.sh
+    chmod +x ~/.local/bin/convcommit
 
-    # Create symlink to convcommit.sh
-    ln -sf ~/.local/lib/convcommitgpt/convcommit.sh ~/.local/bin/convcommit
+    # Setup container runtime
+    setup_container_runtime
 
     # Setup configuration
     setup_configuration
 
     print_message "Installation completed successfully!" "$GREEN"
     print_message "You can now use 'convcommit' command" "$GREEN"
+    print_message "Make sure Ollama is running with: ollama serve" "$YELLOW"
+    print_message "And the model is pulled with: ollama pull qwen3:8b" "$YELLOW"
 }
 
 # Run main function

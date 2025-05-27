@@ -30,6 +30,38 @@ case "$(uname -m)" in
 esac
 echo "Platform detected: $PLATFORM"
 
+# Function to get host IP
+get_host_ip() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # Try different network interfaces on macOS
+        for interface in en0 en1; do
+            ip=$(ipconfig getifaddr $interface 2>/dev/null)
+            if [ ! -z "$ip" ]; then
+                echo "$ip"
+                return 0
+            fi
+        done
+        echo "Error: Could not determine host IP address"
+        return 1
+    else
+        # Linux - try different methods
+        # First try hostname -I
+        ip=$(hostname -I | awk '{print $1}' 2>/dev/null)
+        if [ ! -z "$ip" ]; then
+            echo "$ip"
+            return 0
+        fi
+        # Then try ip command
+        ip=$(ip route get 1 | awk '{print $7;exit}' 2>/dev/null)
+        if [ ! -z "$ip" ]; then
+            echo "$ip"
+            return 0
+        fi
+        echo "Error: Could not determine host IP address"
+        return 1
+    fi
+}
+
 # Detect OS and set Ollama URL and network configuration
 echo "Detecting OS type: $OSTYPE"
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -37,32 +69,66 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     if [[ "$CONTAINER_CMD" == "docker" ]]; then
         echo "Using Docker on macOS"
         OLLAMA_BASE_URL="http://host.docker.internal:11434/v1"
-        HOST_IP=$(ipconfig getifaddr en0)
+        HOST_IP=$(get_host_ip)
+        if [ $? -ne 0 ]; then
+            exit 1
+        fi
         echo "Host IP detected: $HOST_IP"
         NETWORK_OPTS="--add-host=host.docker.internal:$HOST_IP"
-        echo "Network options: $NETWORK_OPTS"
     else
         echo "Using Podman on macOS"
-        HOST_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
-        if [ -z "$HOST_IP" ]; then
-            echo "Error: Could not determine host IP address"
+        HOST_IP=$(get_host_ip)
+        if [ $? -ne 0 ]; then
             exit 1
         fi
         echo "Host IP detected: $HOST_IP"
         OLLAMA_BASE_URL="http://${HOST_IP}:11434/v1"
         NETWORK_OPTS="--add-host=host.docker.internal:${HOST_IP}"
-        echo "Network options: $NETWORK_OPTS"
     fi
 else
     echo "Linux detected"
-    OLLAMA_BASE_URL="http://localhost:11434/v1"
-    NETWORK_OPTS=""
-    echo "Network options: $NETWORK_OPTS"
+    if [[ "$CONTAINER_CMD" == "docker" ]]; then
+        echo "Using Docker on Linux"
+        OLLAMA_BASE_URL="http://host.docker.internal:11434/v1"
+        HOST_IP=$(get_host_ip)
+        if [ $? -ne 0 ]; then
+            exit 1
+        fi
+        echo "Host IP detected: $HOST_IP"
+        NETWORK_OPTS="--add-host=host.docker.internal:$HOST_IP"
+    else
+        echo "Using Podman on Linux"
+        OLLAMA_BASE_URL="http://localhost:11434/v1"
+        NETWORK_OPTS=""
+    fi
 fi
 
+echo "Network options: $NETWORK_OPTS"
 echo "Ollama base URL: $OLLAMA_BASE_URL"
-OLLAMA_MODEL="qwen3:8b"
+
+# Check if Ollama is running
+echo "Checking if Ollama is running..."
+if ! curl -s "$OLLAMA_BASE_URL" > /dev/null; then
+    echo "Error: Ollama is not running or not accessible at $OLLAMA_BASE_URL"
+    echo "Please start Ollama with: ollama serve"
+    exit 1
+fi
+
+# Get model from .env file or use default
+if [ -f ~/.local/lib/convcommitgpt/.env ]; then
+    OLLAMA_MODEL=$(grep MODEL ~/.local/lib/convcommitgpt/.env | cut -d'=' -f2)
+else
+    OLLAMA_MODEL="qwen3:8b"
+fi
 echo "Ollama model: $OLLAMA_MODEL"
+
+# Check if model is available
+echo "Checking if model $OLLAMA_MODEL is available..."
+if ! curl -s "$OLLAMA_BASE_URL/tags" | grep -q "$OLLAMA_MODEL"; then
+    echo "Error: Model $OLLAMA_MODEL is not available in Ollama"
+    echo "Please pull the model using: ollama pull $OLLAMA_MODEL"
+    exit 1
+fi
 
 # Image name
 IMAGE_NAME="ghcr.io/mnofresno/convcommitgpt:latest"
@@ -86,7 +152,6 @@ if [[ "$1" == "-d" && "$2" == "-" ]]; then
         $NETWORK_OPTS \
         -e BASE_URL="$OLLAMA_BASE_URL" \
         -e MODEL="$OLLAMA_MODEL" \
-        -v "$SCRIPT_DIR:/app" \
         --security-opt=label=disable \
         --user "$(id -u):$(id -g)" \
         $IMAGE_NAME "${@:2}"
@@ -122,7 +187,6 @@ else
         $NETWORK_OPTS \
         -e BASE_URL="$OLLAMA_BASE_URL" \
         -e MODEL="$OLLAMA_MODEL" \
-        -v "$SCRIPT_DIR:/app" \
         --security-opt=label=disable \
         --user "$(id -u):$(id -g)" \
         $IMAGE_NAME -d - "${@:2}"
