@@ -106,6 +106,7 @@ main() {
 
     # Set permissions
     chmod +x ~/.local/lib/convcommitgpt/convcommit.sh
+    chmod +x ~/.local/bin/convcommit
 
     # Pull Docker image
     print_message "Pulling Docker image..." "$YELLOW"
