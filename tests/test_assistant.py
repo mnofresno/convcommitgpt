@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import Mock, patch
-from assistant import Assistant
+from convcommitgpt.assistant import Assistant
 
 @pytest.fixture
 def mock_response():

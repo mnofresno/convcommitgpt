@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from io import StringIO
-from convcommit import main
+from convcommitgpt.convcommit import main
 
 @pytest.fixture
 def mock_diff_generator():

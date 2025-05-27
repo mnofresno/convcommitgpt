@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
-from diff_generator import DiffGenerator
+from convcommitgpt.diff_generator import DiffGenerator
 
 @pytest.fixture
 def mock_git_diff():

@@ -16,8 +16,10 @@ ENV OLLAMA_HOST=host.docker.internal
 ENV OLLAMA_PORT=11434
 
 # Copy application files
-COPY *.py ./
-COPY *.md ./
+COPY . .
+
+# Install the package
+RUN pip install -e .
 
 # Set the entrypoint
-ENTRYPOINT ["python", "convcommit.py"]
+ENTRYPOINT ["python", "-m", "convcommitgpt.convcommit"]

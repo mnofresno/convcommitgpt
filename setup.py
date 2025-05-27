@@ -19,7 +19,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "convcommit=convcommit:main",
+            "convcommit=convcommitgpt.convcommit:main",
         ],
     },
 ) 

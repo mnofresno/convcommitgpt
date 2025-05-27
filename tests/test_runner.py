@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
-from runner import Runner
-from assistant import Assistant
+from convcommitgpt.runner import Runner
+from convcommitgpt.assistant import Assistant
 
 @pytest.fixture
 def mock_assistant():

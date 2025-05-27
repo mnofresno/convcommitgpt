@@ -121,11 +121,7 @@ download_files() {
     print_message "Downloading files..." "$YELLOW"
     cd /tmp
     local files=(
-        "convcommit.py"
-        "assistant.py"
-        "diff_generator.py"
-        "runner.py"
-        "spinner.py"
+        "setup.py"
         "requirements.txt"
         "instructions_prompt.md"
         "convcommit.sh"
@@ -138,8 +134,19 @@ download_files() {
         fi
     done
 
+    # Download the package directory
+    if ! curl -sSL "https://github.com/mnofresno/convcommitgpt/archive/refs/heads/main.zip" -o "main.zip"; then
+        print_message "Error: Failed to download package" "$RED"
+        exit 1
+    fi
+
+    # Extract the package
+    unzip -q main.zip
+    rm main.zip
+
     print_message "Copying files to installation directory..." "$YELLOW"
-    cp -r /tmp/*.py /tmp/*.txt /tmp/*.md /tmp/convcommit.sh ~/.local/lib/convcommitgpt/
+    cp -r convcommitgpt-main/convcommitgpt ~/.local/lib/convcommitgpt/
+    cp /tmp/*.py /tmp/*.txt /tmp/*.md /tmp/convcommit.sh ~/.local/lib/convcommitgpt/
     cd -
 }
 

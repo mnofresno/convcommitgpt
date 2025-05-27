@@ -54,17 +54,14 @@ prepare_build_dir() {
     BUILD_DIR=$(mktemp -d)
     print_message "Created build directory: $BUILD_DIR" "$GREEN"
     
-    # Copy all Python files, requirements.txt, and markdown files
-    cp *.py "$BUILD_DIR/" 2>/dev/null || true
-    cp requirements.txt "$BUILD_DIR/" 2>/dev/null || true
-    cp *.md "$BUILD_DIR/" 2>/dev/null || true
-    cp Dockerfile "$BUILD_DIR/"
+    # Copy all files to build directory
+    cp -r . "$BUILD_DIR/"
     
     # Change to build directory
     cd "$BUILD_DIR"
     
     # Verify essential files exist
-    if [ ! -f "requirements.txt" ] || [ ! -f "convcommit.py" ] || [ ! -f "Dockerfile" ]; then
+    if [ ! -f "setup.py" ] || [ ! -f "requirements.txt" ] || [ ! -f "Dockerfile" ]; then
         print_message "Error: Essential files are missing" "$RED"
         return 1
     fi
