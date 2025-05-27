@@ -1,15 +1,36 @@
 #!/bin/bash
 
+# Function to print verbose messages
+verbose_echo() {
+    if [ "$VERBOSE" = true ]; then
+        echo "$1"
+    fi
+}
+
+# Parse command line arguments
+VERBOSE=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --verbose)
+            VERBOSE=true
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-echo "Script directory: $SCRIPT_DIR"
+verbose_echo "Script directory: $SCRIPT_DIR"
 
 # Detect container runtime
 if command -v docker >/dev/null 2>&1; then
     CONTAINER_CMD="docker"
-    echo "Container runtime detected: Docker"
+    verbose_echo "Container runtime detected: Docker"
 elif command -v podman >/dev/null 2>&1; then
     CONTAINER_CMD="podman"
-    echo "Container runtime detected: Podman"
+    verbose_echo "Container runtime detected: Podman"
 else
     echo "Error: Neither Docker nor Podman is installed"
     exit 1
@@ -28,11 +49,11 @@ case "$(uname -m)" in
         exit 1
         ;;
 esac
-echo "Platform detected: $PLATFORM"
+verbose_echo "Platform detected: $PLATFORM"
 
 # Read configuration from .env
 if [ -f ~/.local/lib/convcommitgpt/.env ]; then
-    echo "Reading configuration from ~/.local/lib/convcommitgpt/.env"
+    verbose_echo "Reading configuration from ~/.local/lib/convcommitgpt/.env"
     source ~/.local/lib/convcommitgpt/.env
 else
     echo "Error: Configuration file ~/.local/lib/convcommitgpt/.env not found"
@@ -41,7 +62,7 @@ fi
 
 # Image name
 IMAGE_NAME="ghcr.io/mnofresno/convcommitgpt:latest"
-echo "Using image: $IMAGE_NAME"
+verbose_echo "Using image: $IMAGE_NAME"
 
 # Function to check if directory is a git repository
 is_git_repo() {
@@ -53,9 +74,9 @@ is_git_repo() {
 }
 
 if [[ "$1" == "-d" && "$2" == "-" ]]; then
-    echo "Processing direct diff from stdin"
+    verbose_echo "Processing direct diff from stdin"
     DIRECT_DIFF=$(cat -)
-    echo "Running container with direct diff..."
+    verbose_echo "Running container with direct diff..."
     echo "$DIRECT_DIFF"| $CONTAINER_CMD run --rm -i \
         --platform "$PLATFORM" \
         --network host \
@@ -63,6 +84,7 @@ if [[ "$1" == "-d" && "$2" == "-" ]]; then
         -e MODEL="$MODEL" \
         -e OPENAI_TIMEOUT=300 \
         -e HTTPX_TIMEOUT=300 \
+        -e VERBOSE="$VERBOSE" \
         --security-opt=label=disable \
         --user "$(id -u):$(id -g)" \
         $IMAGE_NAME "${@:2}"
@@ -72,27 +94,27 @@ else
         exit 1
     fi
     GIT_DIR="$(realpath "${1:-'.'}")"
-    echo "Git directory: $GIT_DIR"
+    verbose_echo "Git directory: $GIT_DIR"
     
     # Verify it's a Git repository
     if ! is_git_repo "$GIT_DIR"; then
         echo "Error: $GIT_DIR is not a Git repository"
         exit 1
     fi
-    echo "Git repository verified"
+    verbose_echo "Git repository verified"
     
     # Generate diff locally
-    echo "Generating git diff..."
+    verbose_echo "Generating git diff..."
     DIFF=$(cd "$GIT_DIR" && git diff --cached)
     
     if [ -z "$DIFF" ]; then
         echo "No staged changes found in $GIT_DIR"
         exit 1
     fi
-    echo "Diff generated successfully"
+    verbose_echo "Diff generated successfully"
     
     # Pass diff to container
-    echo "Running container with git diff..."
+    verbose_echo "Running container with git diff..."
     echo "$DIFF" | $CONTAINER_CMD run --rm -i \
         --platform "$PLATFORM" \
         --network host \
@@ -100,6 +122,7 @@ else
         -e MODEL="$MODEL" \
         -e OPENAI_TIMEOUT=300 \
         -e HTTPX_TIMEOUT=300 \
+        -e VERBOSE="$VERBOSE" \
         --security-opt=label=disable \
         --user "$(id -u):$(id -g)" \
         $IMAGE_NAME -d - "${@:2}"
